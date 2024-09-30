@@ -41,7 +41,7 @@ async def chat(request: ChatRequest):
         input_ids = tokenizer.encode(request.message, return_tensors="pt").to(device)
 
         # Generate response using the model
-        output_ids = model.generate(input_ids, max_length=50, num_return_sequences=1, pad_token_id=tokenizer.eos_token_id)
+        output_ids = model.generate(input_ids, max_length=100, num_return_sequences=1,no_repeat_ngram_size=2, pad_token_id=tokenizer.eos_token_id)
 
         # Decode generated tokens to string
         response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
