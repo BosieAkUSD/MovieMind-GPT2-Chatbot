@@ -28,7 +28,7 @@ elif torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-# Load fine tuned model. NOTE: unzip first
+# Load fine tuned model. NOTE: Model weights were too large to push into repo, get download link from dimitri
 tokenizer = AutoTokenizer.from_pretrained("./movie_10_100")
 model = AutoModelForCausalLM.from_pretrained("./movie_10_100").to(device)
 
