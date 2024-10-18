@@ -2,16 +2,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
+# Initialize FastAPI app
 app = FastAPI()
 
-# CORS settings to allow communication with the frontend
+# CORS middleware configuration
 origins = [
-    "http://localhost:3000",  # Local development URL
-    "http://localhost:3001"   # Adjust as necessary for frontend dev
+    "http://localhost:3000",  # Local frontend URLs
+    "http://localhost:3001"
 ]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -20,38 +20,68 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Load GPT-2 model as placeholder to be replaced with our Movie dialog trained model
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-model = GPT2LMHeadModel.from_pretrained("gpt2")
-model.to(device)
+# Device configuration
+if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+    device = torch.device("mps")
+elif torch.cuda.is_available():
+    device = torch.device("cuda")
+else:
+    device = torch.device("cpu")
 
-# Define input schema for the chatbot endpoint
+# Load fine tuned model. NOTE: unzip first
+tokenizer = AutoTokenizer.from_pretrained("./movie_10_100")
+model = AutoModelForCausalLM.from_pretrained("./movie_10_100").to(device)
+
+# load vanilla model
+#tokenizer = AutoTokenizer.from_pretrained("gpt2-medium")
+#model = AutoModelForCausalLM.from_pretrained("gpt2-medium").to(device)
+
+# Ensure pad token is set to avoid warnings
+tokenizer.pad_token = tokenizer.eos_token
+
+# Define request schema
 class ChatRequest(BaseModel):
     message: str
 
+# Root endpoint
 @app.get("/", tags=["root"])
 async def read_root() -> dict:
     return {"message": "Welcome to our chatbot API."}
 
+# Chat endpoint
 @app.post("/chat")
 async def chat(request: ChatRequest):
     try:
-        # Encode input message
-        input_ids = tokenizer.encode(request.message, return_tensors="pt").to(device)
+        prompt = f"You are a helpful ChatBot designed to answer questions. \nUser: {request.message} \nChatBot:"
+            
+        # Encode input with attention mask
+        inputs = tokenizer(
+            prompt, return_tensors="pt", padding=True
+        ).to(device)
 
-        # Generate response using the model
-        output_ids = model.generate(input_ids, max_length=100, num_return_sequences=1,no_repeat_ngram_size=2, pad_token_id=tokenizer.eos_token_id)
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs["attention_mask"]
 
-        # Decode generated tokens to string
-        response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        # Generate the response with min_new_tokens constraint
+        output_ids = model.generate(
+            input_ids,
+            attention_mask=attention_mask,
+            max_length=input_ids.shape[1] + 100,  # Max total length (prompt + response)
+            min_new_tokens=10,  # Ensure at least 10 token generated after the prompt
+            no_repeat_ngram_size=2,  # Avoid repetition
+            temperature=0.9,  # Introduce randomness for better responses
+            eos_token_id=tokenizer.eos_token_id  # Stop when EOS is generated
+        )
 
-        # Return only the response beyond the user input for clarity
-        chat_response = response[len(request.message):].strip()
+        # Decode the generated response
+        response = tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
+        chat_response = response[len(prompt):]
+        chat_response = chat_response.split("user:")[0]
+        
+        # Return the response
+        return {"reply": chat_response, "prompt_and_response": response}
 
-        return {"reply": chat_response}
-    
     except Exception as e:
-        # Log the exception for debugging
-        print("Error processing chatbot request:", str(e))
+        # Log the error and raise an HTTP exception
+        print(f"Error processing chatbot request: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
