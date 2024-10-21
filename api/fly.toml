@@ -1,0 +1,20 @@
+# fly.toml app configuration file generated for api-weathered-resonance-8042 on 2024-10-20T23:47:12-07:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'api-weathered-resonance-8042'
+primary_region = 'lax'
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  size = 'performance-16x'
