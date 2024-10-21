@@ -27,7 +27,7 @@ const ChatBotInterface = () => {
 
     try {
       // Make a request to the FastAPI backend
-      const response = await axios.post("http://localhost:8080/chat", {
+      const response = await axios.post("https://api-weathered-resonance-8042.fly.dev/chat", {
         message: userInput,
       });
 

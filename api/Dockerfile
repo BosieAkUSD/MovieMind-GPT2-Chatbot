@@ -1,15 +1,27 @@
-FROM python:3.12.7 AS builder
+# Use a Python 3.9 base image
+FROM python:3.9-slim
 
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Install system dependencies for OpenCV and other libraries
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    libgl1-mesa-glx \
+    libglib2.0-0
+
+# Set the working directory inside the container
 WORKDIR /app
 
-
-RUN python -m venv .venv
+# Copy the requirements file into the container
 COPY requirements.txt ./
-RUN .venv/bin/pip install -r requirements.txt
-FROM python:3.12.7-slim
-WORKDIR /app
-COPY --from=builder /app/.venv .venv/
+
+# Install CPU-only PyTorch
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the app files into the container
 COPY . .
-CMD ["/app/.venv/bin/fastapi", "run"]
+
+# Expose port 8080 for the FastAPI application
+EXPOSE 8080
+
+# Command to run the application
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "debug"]
